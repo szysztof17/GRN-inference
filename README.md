@@ -88,3 +88,60 @@ These are only needed if you're building a custom GRN and are **not** providing 
         1.  `matrix.mtx.gz`
         2.  `barcodes.tsv.gz`
         3.  `peaks.bed.gz`
+
+
+## Generation of high confidence STRING12.0 pairs 
+
+```
+# #### STRING DB v12
+
+# Downloading of STRING protein-protein interactions for human (H. sapiens, TaxonomyID 9606).
+
+# We download protein-protein links: `9606.protein.links.v12.0.txt.gz`, and protein aliases: `9606.protein.aliases.v12.0.txt.gz`.
+#!wget https://stringdb-downloads.org/download/protein.links.v12.0/9606.protein.links.v12.0.txt.gz
+
+protein_links = '/home/kl467102/string_dir/9606.protein.links.v12.0.txt.gz'
+protein_links_df = pd.read_csv(protein_links, sep=' ', header=0, index_col=None)
+
+#! wget https://stringdb-downloads.org/download/protein.links.full.v12.0/9606.protein.links.full.v12.0.txt.gz
+
+protein_links_full = '/home/kl467102/string_dir/9606.protein.links.full.v12.0.txt.gz'
+protein_links_full_df = pd.read_csv(protein_links_full, sep=' ', header=0, index_col=None)
+protein_links_full_df.head()
+
+
+#!wget https://stringdb-downloads.org/download/protein.aliases.v12.0/9606.protein.aliases.v12.0.txt.gz
+
+protein_aliases = '/home/kl467102/string_dir/9606.protein.aliases.v12.0.txt.gz'
+protein_aliases_df = pd.read_csv(protein_aliases, sep='\t', header=0, index_col=None)
+protein_aliases_df.head()
+
+string_to_hgnc = protein_aliases_df[protein_aliases_df['source'] == 'Ensembl_HGNC'][['#string_protein_id', 'alias']]
+string_to_hgnc = string_to_hgnc.set_index('#string_protein_id')['alias'].to_dict()
+
+string_to_entrez = protein_aliases_df[protein_aliases_df['source'] == 'Ensembl_EntrezGene'][['#string_protein_id', 'alias']]
+string_to_entrez = string_to_entrez.set_index('#string_protein_id')['alias'].to_dict()
+
+string_to_hugo = protein_aliases_df[protein_aliases_df['source'] == 'BioMart_HUGO'][['#string_protein_id', 'alias']]
+string_to_hugo = string_to_hugo.set_index('#string_protein_id')['alias'].to_dict()
+
+string_to_ensembl = protein_aliases_df[protein_aliases_df['source'] == 'Ensembl_gene'][['#string_protein_id', 'alias']]
+string_to_ensembl = string_to_ensembl.set_index('#string_protein_id')['alias'].to_dict()
+
+def map_string_to_gene(string_id):
+    return string_to_hgnc.get(string_id) or string_to_entrez.get(string_id) or string_to_hugo.get(string_id) or string_to_ensembl.get(string_id) or string_id
+
+# Apply mapping
+protein_links_df['Gene1'] = protein_links_df['protein1'].apply(map_string_to_gene)
+protein_links_df['Gene2'] = protein_links_df['protein2'].apply(map_string_to_gene)
+
+# Save the result
+#protein_links_df.to_csv("9606_protein_links_gene_names.csv", index=False)
+
+selected_df = protein_links_df[protein_links_df['combined_score'] > 700][['Gene1','Gene2']]
+#selected_df.to_csv("9606_protein_links_gene_names_combined_score_700.csv", index=False)
+
+print(f'Numebr of pairs : {protein_links_df.shape[0]}')
+print(f'Numebr of pairs with combined score > 700: {selected_df.shape[0]}')
+
+```
