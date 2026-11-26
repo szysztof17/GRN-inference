@@ -90,7 +90,7 @@ def preprocess_scrna(config, qc_params):
 
     adata.var["mt"] = adata.var_names.str.startswith("MT-")
     sc.pp.calculate_qc_metrics(adata, qc_vars=["mt"], inplace=True)
-    sc.pp.filter_cells(adata, min_genes=qc_params["min_genes"])
+    sc.pp.filter_cells(adata, min_genes=qc_params["min_genes_per_cell"])
     sc.pp.filter_cells(adata, max_counts=qc_params["max_counts"])
     adata = adata[adata.obs.pct_counts_mt < qc_params["pct_mt"], :].copy()
     adata = adata[:, ~adata.var.mt].copy()
@@ -105,29 +105,29 @@ def preprocess_scrna(config, qc_params):
     sc.pp.highly_variable_genes(adata, n_top_genes=qc_params["n_top_hvg"])
 
     
-    sc.pp.neighbors(adata_hvg, n_neighbors=10, n_pcs=40)
-    sc.tl.umap(adata_hvg)
-    sc.tl.leiden(adata_hvg)
+    sc.pp.neighbors(adata, n_neighbors=10, n_pcs=40)
+    sc.tl.umap(adata)
+    sc.tl.leiden(adata)
     
+    adata_path = param_prefix / "adata.h5ad"
+    adata.write(adata)
     adata_hvg = adata[:, adata.var.highly_variable].copy()
-    adata_hvg_path = param_prefix / "adata.h5ad"
-    adata_hvg.write(adata_hvg_path)
 
-    print(f"Processed AnnData object saved to {adata_hvg_path}")
+    print(f"Processed AnnData object saved to {adata_path}")
 
     # --- EXPORT BEELINE-SPECIFIC FILES ---
-    genes_in_data = set(adataadataadataadataadata.var_names)
+    genes_in_data = set(adata.var_names)
     tfs_df = pd.read_csv(config["tf_list_file"], header=0)
     all_known_tfs = set(tfs_df[tfs_df.columns[0]])
     tfs_in_data = all_known_tfs.intersection(genes_in_data)
     print(f"Found {len(tfs_in_data)} TFs present in the expression data.")
 
-    sc.pp.highly_variable_genes(adataadataadataadata, n_top_genes=None)
-    default_mask = adataadataadata.var['highly_variable'].copy()
+    sc.pp.highly_variable_genes(adata, n_top_genes=None)
+    default_mask = adata.var['highly_variable'].copy()
     n_default = default_mask.sum()
     print(f"Default HVGs: {n_default}")
     # Cutoff HVGs
-    sc.pp.highly_variable_genes(adataadata, n_top_genes=n_top_hvg)
+    sc.pp.highly_variable_genes(adata, n_top_genes=n_top_hvg)
     cutoff_mask = adata.var['highly_variable'].copy()
     n_cutoff = cutoff_mask.sum()
     print(f"Top {n_top_hvg} HVGs: {n_cutoff}")
@@ -142,6 +142,9 @@ def preprocess_scrna(config, qc_params):
     print(f"Including additional {added} TFs → total combined HVGs: {combined.sum()}")
     os.makedirs(param_prefix, exist_ok=True)
     # 1. Export ExpressionData.csv
+    ad_hvg = adata[:, combined].copy()
+    ad_hvg_path = output_dir / f"{dataset_name}_{network_name}_{n_top_hvg}{tfs_suffix}.h5ad"
+
     expr_df = pd.DataFrame(adata_hvg.X.toarray(), index=adata_hvg.obs_names, columns=adata_hvg.var_names).T
     expr_df.to_csv(param_prefix / 'ExpressionData.csv')
     
